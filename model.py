@@ -563,7 +563,7 @@ class Tacotron2(nn.Module):
         self.postnet = Postnet(hparams)
         if hparams.with_gst:
             self.gst = GST(hparams)
-        self.speaker_embedding = nn.Emb고edding(
+        self.speaker_embedding = nn.Embedding(
             hparams.n_speakers, hparams.speaker_embedding_dim)
 
     def parse_batch(self, batch):
