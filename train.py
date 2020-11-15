@@ -1,6 +1,3 @@
-import torch_xla
-import torch_xla.core.xla_model as xm
-
 import os
 import time
 import argparse
@@ -18,6 +15,11 @@ from data_utils import TextMelLoader, TextMelCollate
 from loss_function import Tacotron2Loss
 from logger import Tacotron2Logger
 from hparams import create_hparams
+
+
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.distributed.xla_multiprocessing as xmp
 
 device = xm.xla_device()
 
@@ -214,6 +216,9 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                     hparams.learning_rate_min, learning_rate * 0.5)
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = learning_rate
+
+            ### mcm
+            batch = batch.to(device)
 
             model.zero_grad()
             x, y = model.parse_batch(batch)
