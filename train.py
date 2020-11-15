@@ -1,3 +1,6 @@
+import torch_xla
+import torch_xla.core.xla_model as xm
+
 import os
 import time
 import argparse
@@ -15,6 +18,9 @@ from data_utils import TextMelLoader, TextMelCollate
 from loss_function import Tacotron2Loss
 from logger import Tacotron2Logger
 from hparams import create_hparams
+
+device = xm.xla_device()
+
 
 
 def reduce_tensor(tensor, n_gpus):
@@ -156,6 +162,10 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     torch.cuda.manual_seed(hparams.seed)
 
     model = load_model(hparams)
+
+    ####mcm
+    model = model.to(device)
+
     learning_rate = hparams.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                                  weight_decay=hparams.weight_decay)
@@ -243,10 +253,8 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                         hparams.batch_size, n_gpus, collate_fn, logger,
                         hparams.distributed_run, rank)
                 if rank == 0:
-                    checkpoint_path = os.path.join(
-                        output_directory, "checkpoint_{}".format(iteration))
-                    save_checkpoint(model, optimizer, learning_rate, iteration,
-                                    checkpoint_path)
+                    checkpoint_path = os.path.join(output_directory, "checkpoint_{}".format(iteration))
+                    save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
 
             iteration += 1
 
