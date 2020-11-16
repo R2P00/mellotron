@@ -23,7 +23,7 @@ import torch_xla.distributed.xla_multiprocessing as xmp
 import torch_xla.distributed.parallel_loader as pl
 import time
 
-device = xm.xla_device()
+
 
 
 
@@ -435,7 +435,7 @@ if __name__ == '__main__':
 
     xmp.spawn(map_fn, args=(flags,), nprocs=8, start_method='fork')
 
-
+    device = xm.xla_device()
 
     # train(args.output_directory, args.log_directory, args.checkpoint_path,
     #       args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
