@@ -160,6 +160,7 @@ def map_fn(index, flags):
 
     model = load_model(flags['hparams'])
 
+    device = xm.xla_device()
     ####mcm
     model = model.to(device)
 
