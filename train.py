@@ -218,10 +218,10 @@ def map_fn(index, flags):
                     param_group['lr'] = learning_rate
 
             ### mcm
-            batch = batch.to(device)
+            #batch = batch.to(device)
 
             model.zero_grad()
-            x, y = model.parse_batch(batch)
+            x, y = model.to(device).parse_batch(batch)
             y_pred = model(x)
 
             loss = criterion(y_pred, y)
