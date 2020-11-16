@@ -221,7 +221,7 @@ def map_fn(index, flags):
             #batch = batch.to(device)
 
             model.zero_grad()
-            x, y = model.to(device).parse_batch(batch)
+            x, y = model.parse_batch(batch)
             y_pred = model(x)
 
             loss = criterion(y_pred, y)
@@ -341,7 +341,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                     param_group['lr'] = learning_rate
 
             ### mcm
-            batch = batch.to(device)
+            batch = batch.to(cpu)
 
             model.zero_grad()
             x, y = model.parse_batch(batch)
