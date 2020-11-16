@@ -417,7 +417,8 @@ if __name__ == '__main__':
 
 
 
-    ###############################################3 tpu
+    ############################################### TPU ##########################
+    flags = {}
     flags['output_directory']   =   args.output_directory
     flags['log_directory']      =   args.log_directory
     flags['checkpoint_path']    =   args.checkpoint_path
