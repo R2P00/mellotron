@@ -150,8 +150,6 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
         logger.log_validation(val_loss, model, y, y_pred, iteration)
 
 def map_fn(index, flags):
-    torch.manual_seed(flags['seed'])
-    device = xm.xla_device()
 
 
     if flags['hparams'].distributed_run:
