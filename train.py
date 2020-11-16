@@ -112,10 +112,14 @@ def load_checkpoint(checkpoint_path, model, optimizer):
 def save_checkpoint(model, optimizer, learning_rate, iteration, filepath):
     print("Saving model and optimizer state at iteration {} to {}".format(
         iteration, filepath))
-    torch.save({'iteration': iteration,
+    xm.save({'iteration': iteration,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'learning_rate': learning_rate}, filepath)
+    # torch.save({'iteration': iteration,
+    #             'state_dict': model.state_dict(),
+    #             'optimizer': optimizer.state_dict(),
+    #             'learning_rate': learning_rate}, filepath)
 
 
 def validate(model, criterion, valset, iteration, batch_size, n_gpus,
