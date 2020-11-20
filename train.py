@@ -17,16 +17,6 @@ from logger import Tacotron2Logger
 from hparams import create_hparams
 
 
-import torch_xla
-import torch_xla.core.xla_model as xm
-import torch_xla.distributed.xla_multiprocessing as xmp
-import torch_xla.distributed.parallel_loader as pl
-import time
-
-
-
-
-
 def reduce_tensor(tensor, n_gpus):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.ReduceOp.SUM)
@@ -63,7 +53,7 @@ def prepare_dataloaders(hparams):
         train_sampler = None
         shuffle = True
 
-    train_loader = DataLoader(trainset, num_workers=8, shuffle=shuffle,
+    train_loader = DataLoader(trainset, num_workers=1, shuffle=shuffle,
                               sampler=train_sampler,
                               batch_size=hparams.batch_size, pin_memory=False,
                               drop_last=True, collate_fn=collate_fn)
@@ -112,14 +102,10 @@ def load_checkpoint(checkpoint_path, model, optimizer):
 def save_checkpoint(model, optimizer, learning_rate, iteration, filepath):
     print("Saving model and optimizer state at iteration {} to {}".format(
         iteration, filepath))
-    xm.save({'iteration': iteration,
+    torch.save({'iteration': iteration,
                 'state_dict': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'learning_rate': learning_rate}, filepath)
-    # torch.save({'iteration': iteration,
-    #             'state_dict': model.state_dict(),
-    #             'optimizer': optimizer.state_dict(),
-    #             'learning_rate': learning_rate}, filepath)
 
 
 def validate(model, criterion, valset, iteration, batch_size, n_gpus,
@@ -149,124 +135,7 @@ def validate(model, criterion, valset, iteration, batch_size, n_gpus,
         print("Validation loss {}: {:9f}  ".format(iteration, reduced_val_loss))
         logger.log_validation(val_loss, model, y, y_pred, iteration)
 
-def map_fn(index, flags):
-
-
-    if flags['hparams'].distributed_run:
-        init_distributed(flags['hparams'], flgs['n_gpus'], flags['rank'], flags['group_name'])
-
-    torch.manual_seed(flags['hparams'].seed)
-    torch.cuda.manual_seed(flags['hparams'].seed)
-
-    model = load_model(flags['hparams'])
-
-    device = xm.xla_device()
-    ####mcm
-    model = model.to(device)
-
-    learning_rate = flags['hparams'].learning_rate
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
-                                 weight_decay=flags['hparams'].weight_decay)
-
-    if flags['hparams'].fp16_run:
-        from apex import amp
-        model, optimizer = amp.initialize(
-            model, optimizer, opt_level='O2')
-
-    if flags['hparams'].distributed_run:
-        model = apply_gradient_allreduce(model)
-
-    criterion = Tacotron2Loss()
-
-    logger = prepare_directories_and_logger(
-        flags['output_directory'], flags['log_directory'], flags['rank'])
-
-    train_loader, valset, collate_fn, train_sampler = prepare_dataloaders(flags['hparams'])
-
-    # Load checkpoint if one exists
-    iteration = 0
-    epoch_offset = 0
-    if flags['checkpoint_path'] is not None:
-        if flags['warm_start']:
-            model = warm_start_model(
-                flags['checkpoint_path'], model, flags['hparams'].ignore_layers)
-        else:
-            model, optimizer, _learning_rate, iteration = load_checkpoint(
-                flags['checkpoint_path'], model, optimizer)
-            if flags['hparams'].use_saved_learning_rate:
-                learning_rate = _learning_rate
-            iteration += 1  # next iteration is iteration + 1
-            epoch_offset = max(0, int(iteration / len(train_loader)))
-
-    model.train()
-    is_overflow = False
-    # ================ MAIN TRAINNIG LOOP! ===================
-    for epoch in range(epoch_offset, flags['hparams'].epochs):
-        print("Epoch: {}".format(epoch))
-        if train_sampler is not None:
-            train_sampler.set_epoch(epoch)
-
-        eval_start = time.time()
-
-        pl_train_loader = pl.ParallelLoader(train_loader, [device]).per_device_loader(device)
-        for i, batch in enumerate(pl_train_loader):
-            start = time.perf_counter()
-            if iteration > 0 and iteration % flags['hparams'].learning_rate_anneal == 0:
-                learning_rate = max(
-                    flags['hparams'].learning_rate_min, learning_rate * 0.5)
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = learning_rate
-
-            ### mcm
-            #batch = batch.to(device)
-
-            model.zero_grad()
-            x, y = model.parse_batch(batch)
-            y_pred = model(x)
-
-            loss = criterion(y_pred, y)
-            if flags['hparams'].distributed_run:
-                reduced_loss = reduce_tensor(loss.data, flags['n_gpus']).item()
-            else:
-                reduced_loss = loss.item()
-
-            if flags['hparams'].fp16_run:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
-
-            if flags['hparams'].fp16_run:
-                grad_norm = torch.nn.utils.clip_grad_norm_(
-                    amp.master_params(optimizer), flags['hparams'].grad_clip_thresh)
-                is_overflow = math.isnan(grad_norm)
-            else:
-                grad_norm = torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), flags['hparams'].grad_clip_thresh)
-
-            optimizer.step()
-
-            if not is_overflow and flags['rank'] == 0:
-                duration = time.perf_counter() - start
-                print("Train loss {} {:.6f} Grad Norm {:.6f} {:.2f}s/it".format(
-                    iteration, reduced_loss, grad_norm, duration))
-                logger.log_training(
-                    reduced_loss, grad_norm, learning_rate, duration, iteration)
-
-            if not is_overflow and (iteration % flags['hparams'].iters_per_checkpoint == 0):
-                validate(model, criterion, valset, iteration,
-                        flags['hparams'].batch_size, flags['n_gpus'], collate_fn, logger,
-                        flags['hparams'].distributed_run, flags['rank'])
-                if flags['rank'] == 0:
-                    checkpoint_path = os.path.join(flags['output_directory'], "checkpoint_{}".format(iteration))
-                    save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
-
-            iteration += 1
-
-        elapsed_eval_time = time.time() - eval_start
-        print("Process", index, "finished evaluation. Evaluation time was:", elapsed_eval_time)
-
-
+##
 def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
           rank, group_name, hparams):
     """Training and validation logging results to tensorboard and stdout
@@ -287,10 +156,6 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
     torch.cuda.manual_seed(hparams.seed)
 
     model = load_model(hparams)
-
-    ####mcm
-    model = model.to(device)
-
     learning_rate = hparams.learning_rate
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                                  weight_decay=hparams.weight_decay)
@@ -340,9 +205,6 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = learning_rate
 
-            ### mcm
-            batch = batch.to(cpu)
-
             model.zero_grad()
             x, y = model.parse_batch(batch)
             y_pred = model(x)
@@ -381,8 +243,10 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
                         hparams.batch_size, n_gpus, collate_fn, logger,
                         hparams.distributed_run, rank)
                 if rank == 0:
-                    checkpoint_path = os.path.join(output_directory, "checkpoint_{}".format(iteration))
-                    save_checkpoint(model, optimizer, learning_rate, iteration, checkpoint_path)
+                    checkpoint_path = os.path.join(
+                        output_directory, "checkpoint_{}".format(iteration))
+                    save_checkpoint(model, optimizer, learning_rate, iteration,
+                                    checkpoint_path)
 
             iteration += 1
 
@@ -418,23 +282,5 @@ if __name__ == '__main__':
     print("cuDNN Enabled:", hparams.cudnn_enabled)
     print("cuDNN Benchmark:", hparams.cudnn_benchmark)
 
-
-
-    ############################################### TPU ##########################
-    flags = {}
-    flags['output_directory']   =   args.output_directory
-    flags['log_directory']      =   args.log_directory
-    flags['checkpoint_path']    =   args.checkpoint_path
-    flags['warm_start']         =   args.warm_start
-    flags['n_gpus']             =   args.n_gpus
-    flags['rank']               =   args.rank
-    flags['group_name']         =   args.group_name
-    flags['hparams']            =   hparams
-
-
-    xmp.spawn(map_fn, args=(flags,), nprocs=8, start_method='fork')
-
-    device = xm.xla_device()
-
-    # train(args.output_directory, args.log_directory, args.checkpoint_path,
-    #       args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
+    train(args.output_directory, args.log_directory, args.checkpoint_path,
+          args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
