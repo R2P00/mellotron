@@ -12,7 +12,8 @@ from modules import GST
 drop_rate = 0.5
 
 def load_model(hparams):
-    #model = Tacotron2(hparams).cuda()
+
+    # model = Tacotron2(hparams).cuda()
     model = Tacotron2(hparams)
     if hparams.fp16_run:
         model.decoder.attention_layer.score_mask_value = finfo('float16').min
