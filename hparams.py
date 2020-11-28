@@ -113,6 +113,8 @@ def create_hparams(hparams_string=None, verbose=False):
         batch_size=16,
         mask_padding=True,  # set model's padded outputs to padded values
 
+        with_tensorboard=False,
+
     )
 
     if hparams_string:
