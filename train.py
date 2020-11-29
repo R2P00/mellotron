@@ -409,6 +409,7 @@ def train(output_directory, log_directory, checkpoint_path, warm_start, n_gpus,
 >>>>>>> parent of 32674af... change from gpu to tpu
 
             iteration += 1
+#             mcm
 
 
 if __name__ == '__main__':
