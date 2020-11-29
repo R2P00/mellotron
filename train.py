@@ -281,6 +281,7 @@ def train(i, flags):
                                     checkpoint_path)
 
             iteration += 1
+#             mcm
 
 
 if __name__ == '__main__':
