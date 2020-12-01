@@ -266,4 +266,4 @@ if __name__ == '__main__':
 
     # train(args.output_directory, args.log_directory, args.checkpoint_path,
     #       args.warm_start, args.n_gpus, args.rank, args.group_name, hparams)
-    xmp.spawn(train, flags, nprocs=8, start_method='fork')
+    xmp.spawn(train, args=(flags,), nprocs=8, start_method='fork')
