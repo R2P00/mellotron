@@ -1298,7 +1298,6 @@
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ004-0173.wav|and sometimes slept in "the pit," loaded with heavy irons for a whole year, waiting the jail delivery.|0
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ009-0268.wav|through the improper adjustment of the rope his sufferings were prolonged for five minutes;|0
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ018-0213.wav|which in dramatic interest can compare with the conviction of William Roupell for forgery.|0
-/home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ042-0123.wav|A "patriotic duty" to bring in the harvest. The opinions of the workers (unvoiced) are that it's a great pain in the neck:|0
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ028-0033.wav|There is a Hebrew tradition that it was the oldest of all cities, but now we know that great empires flourished and passed away before Babylon was built.|0
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ017-0124.wav|He frequently declared before and during the trial that it would be impossible to find him guilty.|0
 /home/aiffel0042/PycharmProjects/mellotron/LJSpeech-1.1/wavs/LJ016-0084.wav|the fugitive, uncomfortably ensconced in the flue, came down of his own accord, like Colonel Colt's raccoon.|0
