@@ -185,8 +185,9 @@ def train(index, flags):
     optimizer = torch.optim.Adam(model.parameters(), lr=flags['hparams'].learning_rate,
                                  weight_decay=flags['hparams'].weight_decay)
 
-    train_start = time.time()
+
     for epoch in range(flags['hparams'].epochs):
+        train_start = time.time()
         para_train_loader = pl.ParallelLoader(train_loader, [device]).per_device_loader(device)
 
         # (text, mel, speaker_id, f0)
@@ -209,43 +210,42 @@ def train(index, flags):
 
             xm.optimizer_step(optimizer)
 
+            elapsed_train_time = time.time() - train_start
+            print("Batch Process", index, "finished training. Train time was:", elapsed_train_time)
 
-    elapsed_train_time = time.time() - train_start
-    print("Process", index, "finished training. Train time was:", elapsed_train_time)
+        if (iteration % flags['hparams'].iters_per_checkpoint == 0):
+            # validate(model, criterion, val_dataset, iteration,
+            #          flags['hparams'].batch_size, flags['n_gpus'], collate_fn, logger,
+            #          flags['hparams'].distributed_run, flags['rank'])
 
-    if (iteration % flags['hparams'].iters_per_checkpoint == 0):
-        # validate(model, criterion, val_dataset, iteration,
-        #          flags['hparams'].batch_size, flags['n_gpus'], collate_fn, logger,
-        #          flags['hparams'].distributed_run, flags['rank'])
+            model.eval()
+            eval_start = time.time()
 
-        model.eval()
-        eval_start = time.time()
+            with torch.no_grad():
 
-        with torch.no_grad():
+                para_train_loader = pl.ParallelLoader(val_loader, [device]).per_device_loader(device)
+                for i, batch in enumerate(para_train_loader):
+                    val_loss = 0.0
+                    x, y = model.parse_batch(batch)
+                    y_pred = model(x)
+                    loss = criterion(y_pred, y)
 
-            para_train_loader = pl.ParallelLoader(val_loader, [device]).per_device_loader(device)
-            for i, batch in enumerate(para_train_loader):
-                val_loss = 0.0
-                x, y = model.parse_batch(batch)
-                y_pred = model(x)
-                loss = criterion(y_pred, y)
+                    if flags['num_workers']>1:
+                        reduced_val_loss = reduce_tensor(loss.data, flags['num_workers']).item()
+                    else:
+                        reduced_val_loss = loss.item()
 
-                if flags['num_workers']>1:
-                    reduced_val_loss = reduce_tensor(loss.data, flags['num_workers']).item()
-                else:
-                    reduced_val_loss = loss.item()
+                    val_loss += reduced_val_loss
 
-                val_loss += reduced_val_loss
-
-            val_loss = val_loss / (i + 1)
-
-
-    elapsed_eval_time = time.time() - eval_start
-    print("Process", index, "finished evaluation. Evaluation time was:", elapsed_eval_time)
-    print("Validation loss {}: {:9f}  ".format(iteration, reduced_val_loss))
+                val_loss = val_loss / (i + 1)
 
 
-    iteration += 1
+        elapsed_eval_time = time.time() - eval_start
+        print("Process", index, "finished evaluation. Evaluation time was:", elapsed_eval_time)
+        print("Validation loss {}: {:9f}  ".format(iteration, reduced_val_loss))
+
+
+        iteration += 1
 
 
 
