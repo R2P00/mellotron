@@ -35,7 +35,9 @@ def files_to_list(filename):
 
 def to_gpu(x):
     x = x.contiguous()
+    print("in to_gpu")
 
     if torch.cuda.is_available():
         x = x.cuda(non_blocking=True)
+        print("cuda is available")
     return torch.autograd.Variable(x)
